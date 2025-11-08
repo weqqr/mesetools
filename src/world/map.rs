@@ -1,15 +1,29 @@
-use std::sync::Mutex;
+use std::{
+    io::{Cursor, Read},
+    sync::Mutex,
+};
 
 use glam::IVec3;
-use postgres::{Client, NoTls};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("block not found")]
     BlockNotFound,
 
+    #[error("unsupported block version: {0}")]
+    UnsupportedVersion(u8),
+
+    #[error("unexpected line format: {0}")]
+    UnexpectedFormat(String),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("postgres error: {0}")]
     Postgres(#[from] postgres::Error),
+
+    #[error("sqlite error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
 }
 
 pub struct Map {
@@ -39,35 +53,22 @@ pub struct Block {
 
 impl Block {
     pub fn parse_data(data: &[u8]) -> Result<Self, Error> {
-        unimplemented!()
+        let mut cur = Cursor::new(data);
+        let version = read_u8(&mut cur)?;
+
+        if version < 29 {
+            return Err(Error::UnsupportedVersion(version));
+        }
+
+        println!("{version}");
+
+        Ok(Self { data: Vec::new() })
     }
 }
 
-pub struct PostgresBackend {
-    client: Client,
-}
+fn read_u8(r: &mut impl Read) -> Result<u8, std::io::Error> {
+    let mut buf = [0; 1];
+    r.read_exact(&mut buf)?;
 
-impl PostgresBackend {
-    pub fn new(dsn: String) -> Result<Self, Error> {
-        let client = postgres::Client::connect(&dsn, NoTls)?;
-
-        Ok(Self { client })
-    }
-}
-
-impl MapBackend for PostgresBackend {
-    fn get_block_data(&mut self, pos: IVec3) -> Result<Vec<u8>, Error> {
-        const SQL: &str = "
-            SELECT data
-            FROM blocks
-            WHERE posx = ?
-              AND posy = ?
-              AND posz = ?
-            LIMIT 1";
-
-        let row = self.client.query_one(SQL, &[&pos.x, &pos.y, &pos.z])?;
-        let data = row.get(0);
-
-        Ok(data)
-    }
+    Ok(buf[0])
 }
