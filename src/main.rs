@@ -1,10 +1,51 @@
 use std::{error::Error, path::PathBuf};
 
-use glam::ivec3;
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, EventLoop},
+    window::{Window, WindowId},
+};
 
-use crate::world::{Map, SqliteBackend, WorldMeta};
+use crate::{
+    render::Renderer,
+    world::{Map, SqliteBackend, WorldMeta},
+};
 
+pub mod render;
 pub mod world;
+
+struct App {
+    renderer: Option<Renderer>,
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self { renderer: None }
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window_attributes = Window::default_attributes().with_title("Light");
+        let window = event_loop.create_window(window_attributes).unwrap();
+        let renderer = Renderer::new(window);
+
+        self.renderer = Some(renderer)
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            _ => {}
+        }
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let Some(world_path) = std::env::args().nth(1) else {
@@ -18,8 +59,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_meta = WorldMeta::open(world_meta_path)?;
 
     let backend = world_meta.get_str("backend").unwrap();
-
-    println!("backend: {backend}");
 
     let map = match backend {
         "sqlite3" => {
@@ -36,11 +75,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let block = map.get_block(ivec3(0, 0, 0))?;
-    let node = block.get_node(ivec3(0, 0, 0));
-    let name = block.get_name_by_id(node.id).unwrap();
+    let event_loop = EventLoop::new()?;
+    let mut app = App::new();
 
-    println!("{name}");
+    event_loop.run_app(&mut app)?;
 
     Ok(())
 }
