@@ -9,6 +9,14 @@ struct VertexOutput {
     @location(0) texcoord: vec2f,
 };
 
+struct Uniforms {
+    forward: vec3f,
+    fov: f32,
+    position: vec3f,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
 @vertex
 fn vs_main(
     model: VertexInput,
@@ -21,7 +29,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let origin = vec3(0.0, 0.0, 0.0);
+    let origin = uniforms.position;
     let sphere_center = vec3(0.0, 0.0, -5.0);
     let sphere_radius = 1.0;
 
@@ -41,12 +49,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 }
 
 fn get_ray_dir(aspect_ratio: f32, texcoord: vec2f) -> vec3f {
-    let fov = 1.5708;
-    let tan_half_fov = tan(fov / 2.0);
-    let x = (texcoord.x - 1.0) * tan_half_fov * aspect_ratio;
-    let y = (texcoord.y - 1.0) * tan_half_fov;
-    let z = -1.0;
-    return normalize(vec3(x, y, z));
+    let up = vec3(0.0, 1.0, 0.0);
+    let horizontal = cross(uniforms.forward, up);
+    let vertical = cross(horizontal, uniforms.forward);
+
+    let tan_half_fov = tan(uniforms.fov / 2.0);
+
+    let x = (texcoord.x - 1.0) * horizontal * 2.0 * tan_half_fov * aspect_ratio;
+    let y = (texcoord.y - 1.0) * vertical * 2.0 * tan_half_fov;
+
+    return normalize(uniforms.forward + x + y);
 }
 
 fn intersect_sphere(origin: vec3f, dir: vec3f, center: vec3f, radius: f32) -> f32 {

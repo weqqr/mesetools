@@ -1,18 +1,30 @@
-use glam::{vec2, vec3};
+use glam::{Vec3, vec2, vec3};
 use pollster::FutureExt;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    Adapter, Buffer, BufferUsages, Color, Device, DeviceDescriptor, FragmentState, Instance,
+    Adapter, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType,
+    BufferDescriptor, BufferUsages, Color, Device, DeviceDescriptor, FragmentState, Instance,
     InstanceDescriptor, LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference,
     PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor,
-    ShaderSource, StoreOp, Surface, SurfaceConfiguration, SurfaceTargetUnsafe, VertexAttribute,
-    VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    ShaderStages, ShaderSource, StoreOp, Surface, SurfaceConfiguration, SurfaceTargetUnsafe,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
 use wgpu::{AdapterInfo, CommandEncoderDescriptor, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::asset::{Mesh, Vertex};
+use crate::camera::Camera;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct ShaderUniforms {
+    forward: Vec3,
+    fov: f32,
+    position: Vec3,
+    _pad: f32,
+}
 
 pub struct Renderer {
     surface: Surface<'static>,
@@ -23,6 +35,9 @@ pub struct Renderer {
 
     render_pipeline: RenderPipeline,
     fullscreen_triangle: MeshBuffer,
+    bind_group_layout: BindGroupLayout,
+    bind_group: BindGroup,
+    uniform_buffer: Buffer,
 
     window: Window,
 }
@@ -62,9 +77,23 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
         let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -136,6 +165,22 @@ impl Renderer {
             num_vertices: mesh.num_vertices(),
         };
 
+        let uniform_buffer = device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: std::mem::size_of::<ShaderUniforms>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
         let mut renderer = Self {
             surface,
             adapter,
@@ -145,6 +190,9 @@ impl Renderer {
 
             render_pipeline,
             fullscreen_triangle,
+            bind_group_layout,
+            bind_group,
+            uniform_buffer,
 
             window,
         };
@@ -184,7 +232,7 @@ impl Renderer {
         self.surface.configure(&self.device, &self.surface_config);
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, camera: &Camera) {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
@@ -193,6 +241,22 @@ impl Renderer {
         let surface_texture_view = surface_texture
             .texture
             .create_view(&TextureViewDescriptor::default());
+
+        let (forward, _) = camera.forward_right();
+        let fov = camera.fov.to_radians();
+
+        let uniforms = ShaderUniforms {
+            forward,
+            fov,
+            position: camera.position,
+            _pad: 0.0,
+        };
+
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniforms]),
+        );
 
         {
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -212,6 +276,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, self.fullscreen_triangle.vertex_buffer.slice(..));
             render_pass.draw(0..self.fullscreen_triangle.num_vertices, 0..1);
