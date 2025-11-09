@@ -1,8 +1,5 @@
-use bytemuck::{Pod, Zeroable};
-use glam::{Vec2, Vec3, vec2, vec3};
 use pollster::FutureExt;
-use wgpu::{AdapterInfo, CommandEncoderDescriptor, TextureViewDescriptor};
-use wgpu::util::DeviceExt;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     Adapter, Buffer, BufferUsages, Color, Device, DeviceDescriptor, FragmentState, Instance,
     InstanceDescriptor, LoadOp, Operations, PipelineLayoutDescriptor, PowerPreference,
@@ -11,7 +8,10 @@ use wgpu::{
     ShaderSource, StoreOp, Surface, SurfaceConfiguration, SurfaceTargetUnsafe, VertexAttribute,
     VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
+use wgpu::{AdapterInfo, CommandEncoderDescriptor, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
+
+use crate::asset::Mesh;
 
 pub struct Renderer {
     surface: Surface<'static>,
@@ -21,7 +21,6 @@ pub struct Renderer {
     queue: Queue,
 
     render_pipeline: RenderPipeline,
-    mesh_buffer: MeshBuffer,
 
     window: Window,
 }
@@ -74,7 +73,7 @@ impl Renderer {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
-                buffers: &[Vertex::layout()],
+                buffers: &[vertex_layout()],
             },
             fragment: Some(FragmentState {
                 module: &shader,
@@ -105,35 +104,6 @@ impl Renderer {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&[
-                Vertex {
-                    position: vec3(-0.5, -0.5, 0.0),
-                    normal: vec3(0.0, 0.0, 1.0),
-                    texcoord: vec2(0.0, 0.0),
-                },
-                Vertex {
-                    position: vec3(0.5, -0.5, 0.0),
-                    normal: vec3(0.0, 0.0, 1.0),
-                    texcoord: vec2(1.0, 0.0),
-                },
-                Vertex {
-                    position: vec3(0.0, 0.5, 0.0),
-                    normal: vec3(0.0, 0.0, 1.0),
-                    texcoord: vec2(0.5, 1.0),
-                },
-            ]),
-            usage: BufferUsages::VERTEX,
-        });
-
-        let mesh_buffer = MeshBuffer {
-            vertex_buffer,
-            index_buffer: None,
-            num_indices: 0,
-            num_vertices: 3,
-        };
-
         let mut renderer = Self {
             surface,
             adapter,
@@ -142,7 +112,6 @@ impl Renderer {
             queue,
 
             render_pipeline,
-            mesh_buffer,
 
             window,
         };
@@ -150,6 +119,21 @@ impl Renderer {
         renderer.resize(inner_size);
 
         renderer
+    }
+
+    pub fn create_mesh_buffer(&self, mesh: &Mesh) -> MeshBuffer {
+        let vertex_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(mesh.vertex_data()),
+            usage: BufferUsages::VERTEX,
+        });
+
+        MeshBuffer {
+            vertex_buffer,
+            index_buffer: None,
+            num_indices: 0,
+            num_vertices: mesh.num_vertices(),
+        }
     }
 
     pub fn adapter_info(&self) -> AdapterInfo {
@@ -167,7 +151,7 @@ impl Renderer {
         self.surface.configure(&self.device, &self.surface_config);
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, mesh_buffer: &MeshBuffer) {
         let mut encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
@@ -194,15 +178,14 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-
             render_pass.set_pipeline(&self.render_pipeline);
 
-            render_pass.set_vertex_buffer(0, self.mesh_buffer.vertex_buffer.slice(..));
-            if let Some(index_buffer) = &self.mesh_buffer.index_buffer {
+            render_pass.set_vertex_buffer(0, mesh_buffer.vertex_buffer.slice(..));
+            if let Some(index_buffer) = &mesh_buffer.index_buffer {
                 render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.draw_indexed(0..self.mesh_buffer.num_indices, 0, 0..1);
+                render_pass.draw_indexed(0..mesh_buffer.num_indices, 0, 0..1);
             } else {
-                render_pass.draw(0..self.mesh_buffer.num_vertices, 0..1);
+                render_pass.draw(0..mesh_buffer.num_vertices, 0..1);
             }
         }
 
@@ -223,38 +206,28 @@ pub struct MeshBuffer {
     num_vertices: u32,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: Vec3,
-    pub normal: Vec3,
-    pub texcoord: Vec2,
-}
+const ATTRIBUTES: [VertexAttribute; 3] = [
+    VertexAttribute {
+        offset: 0,
+        shader_location: 0,
+        format: VertexFormat::Float32x3,
+    },
+    VertexAttribute {
+        offset: 3 * 4,
+        shader_location: 1,
+        format: VertexFormat::Float32x3,
+    },
+    VertexAttribute {
+        offset: 6 * 4,
+        shader_location: 2,
+        format: VertexFormat::Float32x2,
+    },
+];
 
-impl Vertex {
-    const ATTRIBUTES: [VertexAttribute; 3] = [
-        VertexAttribute {
-            offset: 0,
-            shader_location: 0,
-            format: VertexFormat::Float32x3,
-        },
-        VertexAttribute {
-            offset: 3 * 4,
-            shader_location: 1,
-            format: VertexFormat::Float32x3,
-        },
-        VertexAttribute {
-            offset: 6 * 4,
-            shader_location: 2,
-            format: VertexFormat::Float32x2,
-        },
-    ];
-
-    pub fn layout() -> VertexBufferLayout<'static> {
-        VertexBufferLayout {
-            array_stride: std::mem::size_of::<Self>() as u64,
-            step_mode: VertexStepMode::Vertex,
-            attributes: &Self::ATTRIBUTES,
-        }
+fn vertex_layout() -> VertexBufferLayout<'static> {
+    VertexBufferLayout {
+        array_stride: 8 * 4,
+        step_mode: VertexStepMode::Vertex,
+        attributes: &ATTRIBUTES,
     }
 }

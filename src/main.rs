@@ -1,5 +1,6 @@
 use std::{error::Error, path::PathBuf};
 
+use glam::{vec2, vec3};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -7,21 +8,28 @@ use winit::{
     window::{Window, WindowId},
 };
 
+use crate::asset::{Mesh, Vertex};
+use crate::render::MeshBuffer;
 use crate::{
     render::Renderer,
     world::{Map, SqliteBackend, WorldMeta},
 };
 
+pub mod asset;
 pub mod render;
 pub mod world;
 
 struct App {
     renderer: Option<Renderer>,
+    mesh_buffer: Option<MeshBuffer>,
 }
 
 impl App {
     pub fn new() -> Self {
-        Self { renderer: None }
+        Self {
+            renderer: None,
+            mesh_buffer: None,
+        }
     }
 }
 
@@ -36,6 +44,25 @@ impl ApplicationHandler for App {
             "Light ({} on {})",
             adapter_info.backend, adapter_info.name
         ));
+
+        let mut triangle = Mesh::new();
+        triangle.add_vertex(Vertex {
+            position: vec3(-0.5, -0.5, 0.0),
+            normal: vec3(0.0, 0.0, 1.0),
+            texcoord: vec2(0.0, 0.0),
+        });
+        triangle.add_vertex(Vertex {
+            position: vec3(0.5, -0.5, 0.0),
+            normal: vec3(0.0, 0.0, 1.0),
+            texcoord: vec2(1.0, 0.0),
+        });
+        triangle.add_vertex(Vertex {
+            position: vec3(0.0, 0.5, 0.0),
+            normal: vec3(0.0, 0.0, 1.0),
+            texcoord: vec2(0.5, 1.0),
+        });
+
+        self.mesh_buffer = Some(renderer.create_mesh_buffer(&triangle));
 
         self.renderer = Some(renderer)
     }
@@ -62,7 +89,11 @@ impl ApplicationHandler for App {
             return;
         };
 
-        renderer.render();
+        let Some(mesh_buffer) = &mut self.mesh_buffer else {
+            return;
+        };
+
+        renderer.render(&mesh_buffer);
     }
 }
 
