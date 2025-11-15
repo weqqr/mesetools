@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use render::Renderer;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -7,14 +8,12 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
 struct App {
-    window: Option<Window>
+    renderer: Option<Renderer>,
 }
 
 impl App {
     pub fn new() -> Self {
-        Self {
-            window: None,
-        }
+        Self { renderer: None }
     }
 }
 
@@ -25,8 +24,9 @@ impl ApplicationHandler for App {
             .with_inner_size(PhysicalSize::new(1280, 720));
 
         let window = event_loop.create_window(window_attributes).unwrap();
+        let renderer = Renderer::new(window);
 
-        self.window = Some(window);
+        self.renderer = Some(renderer);
     }
 
     fn window_event(
@@ -39,11 +39,19 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(size);
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.render();
+                }
+            },
             _ => {}
         }
     }
-
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {}
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

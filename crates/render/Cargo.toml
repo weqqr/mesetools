@@ -1,9 +1,9 @@
 [package]
-name = "forma"
+name = "render"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-render.workspace = true
-
+pollster.workspace = true
+wgpu.workspace = true
 winit.workspace = true
