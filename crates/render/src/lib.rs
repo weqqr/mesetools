@@ -107,6 +107,10 @@ impl Renderer {
         surface_texture.present();
     }
 
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
     pub fn window(&self) -> &Window {
         &self.window
     }
