@@ -25,9 +25,6 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("postgres error: {0}")]
-    Postgres(#[from] postgres::Error),
-
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 }

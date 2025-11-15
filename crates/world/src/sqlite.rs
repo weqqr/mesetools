@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rusqlite::Connection;
 
-use crate::world::{Error, MapBackend};
+use crate::{Error, MapBackend};
 
 pub struct SqliteBackend {
     conn: Connection,

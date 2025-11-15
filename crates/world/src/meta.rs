@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
-use crate::world::Error;
+use crate::Error;
 
 pub struct WorldMeta {
     values: HashMap<String, String>,

@@ -14,23 +14,19 @@ use winit::{
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
+use world::{Block, Map, SqliteBackend, WorldMeta};
 
 use crate::camera::Camera;
 use crate::input::Input;
 use crate::node::GlobalMapping;
 use crate::render::DataBuffer;
-use crate::world::Block;
-use crate::{
-    render::Renderer,
-    world::{Map, SqliteBackend, WorldMeta},
-};
+use crate::render::Renderer;
 
 pub mod asset;
 pub mod camera;
 pub mod input;
 pub(crate) mod node;
 pub mod render;
-pub mod world;
 
 struct App {
     renderer: Option<Renderer>,

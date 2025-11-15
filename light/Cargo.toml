@@ -4,12 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+world.workspace = true
+
 bytemuck.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 pollster.workspace = true
-postgres.workspace = true
-rusqlite = { workspace = true, features = ["bundled"] }
 thiserror.workspace = true
 wgpu.workspace = true
 winit.workspace = true
-zstd.workspace = true

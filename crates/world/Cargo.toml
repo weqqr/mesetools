@@ -1,0 +1,10 @@
+[package]
+name = "world"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam.workspace = true
+rusqlite = { workspace = true, features = ["bundled"] }
+thiserror.workspace = true
+zstd.workspace = true
