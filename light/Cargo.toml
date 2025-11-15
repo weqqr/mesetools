@@ -1,0 +1,15 @@
+[package]
+name = "light"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = "1.4"
+glam = { version = "0.30.9", features = ["bytemuck"] }
+pollster = "0.4.0"
+postgres = "0.19.12"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+thiserror = "2.0.17"
+wgpu = "27.0.1"
+winit = "0.30.12"
+zstd = "0.13.3"
